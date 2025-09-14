@@ -1,35 +1,40 @@
 --Servant of the Skull Archfiend
 local s,id=GetID()
 function s.initial_effect(c)
-	--If sent to GY: add Spell/Trap that lists "Summoned Skull"
+	--Add Spell/Trap on Summon
 	local e1=Effect.CreateEffect(c)
 	e1:SetDescription(aux.Stringid(id,0))
 	e1:SetCategory(CATEGORY_TOHAND+CATEGORY_SEARCH)
 	e1:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
 	e1:SetProperty(EFFECT_FLAG_DELAY)
-	e1:SetCode(EVENT_TO_GRAVE)
+	e1:SetCode(EVENT_SUMMON_SUCCESS)
 	e1:SetCountLimit(1,id)
 	e1:SetTarget(s.thtg)
 	e1:SetOperation(s.thop)
 	c:RegisterEffect(e1)
-	--Banish to revive Fiend if you control "Summoned Skull"
-	local e2=Effect.CreateEffect(c)
-	e2:SetDescription(aux.Stringid(id,1))
-	e2:SetCategory(CATEGORY_SPECIAL_SUMMON)
-	e2:SetType(EFFECT_TYPE_IGNITION)
-	e2:SetRange(LOCATION_GRAVE)
-	e2:SetCountLimit(1,{id,1})
-	e2:SetCondition(s.spcon)
-	e2:SetCost(aux.bfgcost)
-	e2:SetTarget(s.sptg)
-	e2:SetOperation(s.spop)
+	local e2=e1:Clone()
+	e2:SetCode(EVENT_SPSUMMON_SUCCESS)
 	c:RegisterEffect(e2)
+	--GY effect: shuffle 1 Fiend + draw
+	local e3=Effect.CreateEffect(c)
+	e3:SetDescription(aux.Stringid(id,1))
+	e3:SetCategory(CATEGORY_TODECK+CATEGORY_DRAW)
+	e3:SetType(EFFECT_TYPE_IGNITION)
+	e3:SetRange(LOCATION_GRAVE)
+	e3:SetCountLimit(1,{id,1})
+	e3:SetCondition(s.gycon)
+	e3:SetCost(s.gycost)
+	e3:SetTarget(s.gytg)
+	e3:SetOperation(s.gyop)
+	c:RegisterEffect(e3)
 end
-s.listed_names=(70781052)
+s.listed_names=(69035382) -- Contract with the Abyss ID = 4016
+s.listed_series=(0x45)
 
---filter for Summoned Skull support Spell/Trap
+--Search Spell/Trap that mentions Summoned Skull or Contract with the Abyss
 function s.thfilter(c)
-	return c:ListsCode(70781052) and c:IsType(TYPE_SPELL+TYPE_TRAP) and c:IsAbleToHand()
+	return (c:IsCode(69035382) or (c:ListsCode(70781052) and c:IsType(TYPE_SPELL+TYPE_TRAP)))
+		and c:IsAbleToHand()
 end
 function s.thtg(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return Duel.IsExistingMatchingCard(s.thfilter,tp,LOCATION_DECK,0,1,nil) end
@@ -44,44 +49,29 @@ function s.thop(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
---check Summoned Skull on field
-function s.cfilter(c)
-	return c:IsFaceup() and c:IsCode(70781052)
+--GY effect
+function s.gycon(e,tp,eg,ep,ev,re,r,rp)
+	return Duel.IsExistingMatchingCard(aux.FaceupFilter(Card.IsCode,70781052),tp,LOCATION_MZONE,0,1,nil)
 end
-function s.spcon(e,tp,eg,ep,ev,re,r,rp)
-	return Duel.IsExistingMatchingCard(s.cfilter,tp,LOCATION_MZONE,0,1,nil)
+function s.gycost(e,tp,eg,ep,ev,re,r,rp,chk)
+	if chk==0 then return Duel.IsExistingMatchingCard(Card.IsDiscardable,tp,LOCATION_HAND,0,1,nil) end
+	Duel.DiscardHand(tp,Card.IsDiscardable,1,1,REASON_COST+REASON_DISCARD)
 end
---revive Fiend with lower level
-function s.spfilter(c,e,tp,lv)
-	return c:IsRace(RACE_FIEND) and c:GetLevel()>0 and c:GetLevel()<lv and c:IsCanBeSpecialSummoned(e,0,tp,false,false)
+function s.tdfilter(c)
+	return c:IsRace(RACE_FIEND) and not c:IsCode(id) and c:IsAbleToDeck()
 end
-function s.sptg(e,tp,eg,ep,ev,re,r,rp,chk)
-	local g=Duel.GetMatchingGroup(s.cfilter,tp,LOCATION_MZONE,0,nil)
-	if chk==0 then
-		if #g==0 then return false end
-		local lv=g:GetFirst():GetLevel()
-		return Duel.IsExistingMatchingCard(s.spfilter,tp,LOCATION_GRAVE,0,1,e:GetHandler(),e,tp,lv)
-	end
-	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,1,tp,LOCATION_GRAVE)
+function s.gytg(e,tp,eg,ep,ev,re,r,rp,chk)
+	if chk==0 then return Duel.IsExistingTarget(s.tdfilter,tp,LOCATION_GRAVE,0,1,nil)
+		and Duel.IsPlayerCanDraw(tp,1) end
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_TODECK)
+	local g=Duel.SelectTarget(tp,s.tdfilter,tp,LOCATION_GRAVE,0,1,1,nil)
+	Duel.SetOperationInfo(0,CATEGORY_TODECK,g,1,0,0)
+	Duel.SetOperationInfo(0,CATEGORY_DRAW,nil,0,tp,1)
 end
-function s.spop(e,tp,eg,ep,ev,re,r,rp)
-	local g=Duel.GetMatchingGroup(s.cfilter,tp,LOCATION_MZONE,0,nil)
-	if #g==0 then return end
-	local lv=g:GetFirst():GetLevel()
-	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
-	local sg=Duel.SelectMatchingCard(tp,s.spfilter,tp,LOCATION_GRAVE,0,1,1,nil,e,tp,lv)
-	if #sg>0 then
-		--Lock Special Summon to Fiends
-		local e1=Effect.CreateEffect(e:GetHandler())
-		e1:SetType(EFFECT_TYPE_FIELD)
-		e1:SetProperty(EFFECT_FLAG_PLAYER_TARGET+EFFECT_FLAG_CLIENT_HINT)
-		e1:SetCode(EFFECT_CANNOT_SPECIAL_SUMMON)
-		e1:SetDescription(aux.Stringid(id,2))
-		e1:SetTargetRange(1,0)
-		e1:SetTarget(function(e,c) return not c:IsRace(RACE_FIEND) end)
-		e1:SetReset(RESET_PHASE+PHASE_END)
-		Duel.RegisterEffect(e1,tp)
-		--Perform Special Summon
-		Duel.SpecialSummon(sg,0,tp,tp,false,false,POS_FACEUP)
+function s.gyop(e,tp,eg,ep,ev,re,r,rp)
+	local tc=Duel.GetFirstTarget()
+	if tc and Duel.SendtoDeck(tc,nil,SEQ_DECKSHUFFLE,REASON_EFFECT)>0 and tc:IsLocation(LOCATION_DECK+LOCATION_EXTRA) then
+		Duel.BreakEffect()
+		Duel.Draw(tp,1,REASON_EFFECT)
 	end
 end
