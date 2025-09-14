@@ -1,71 +1,72 @@
 --Archfiend Skull Overlord of Doom
 local s,id=GetID()
 function s.initial_effect(c)
-    c:EnableReviveLimit()
-    Fusion.AddProcMix(c,true,true,70781052,aux.FilterBoolFunctionEx(Card.IsRace,RACE_FIEND))
-
-    -- Se trata como "Summoned Skull" y "Archfiend"
-    local e1=Effect.CreateEffect(c)
-    e1:SetType(EFFECT_TYPE_SINGLE)
-    e1:SetCode(EFFECT_ADD_CODE)
-    e1:SetProperty(EFFECT_FLAG_CANNOT_DISABLE)
-    e1:SetValue(70781052) -- Código de "Summoned Skull"
-    c:RegisterEffect(e1)
-    local e2=e1:Clone()
-    e2:SetCode(EFFECT_ADD_SETCODE)
-    e2:SetValue(SET_ARCHFIEND)
-    c:RegisterEffect(e2)
-
-    -- Destruir todos los monstruos no-Demonio cuando es Invocado Especialmente
-    local e3=Effect.CreateEffect(c)
-    e3:SetCategory(CATEGORY_DESTROY)
-    e3:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_F)
-    e3:SetCode(EVENT_SPSUMMON_SUCCESS)
-    e3:SetCondition(s.descon)
-    e3:SetTarget(s.destg)
-    e3:SetOperation(s.desop)
-    c:RegisterEffect(e3)
-
-    -- Buff de ATK y banish de monstruos Nivel 4 o menor si solo controlas Demonios
-    local e4=Effect.CreateEffect(c)
-    e4:SetType(EFFECT_TYPE_FIELD)
-    e4:SetCode(EFFECT_UPDATE_ATTACK)
-    e4:SetRange(LOCATION_MZONE)
-    e4:SetTargetRange(LOCATION_MZONE,0)
-    e4:SetCondition(s.atkcon)
-    e4:SetValue(500)
-    c:RegisterEffect(e4)
-
-    local e5=Effect.CreateEffect(c)
-    e5:SetType(EFFECT_TYPE_FIELD)
-    e5:SetCode(EFFECT_TO_GRAVE_REDIRECT)
-    e5:SetProperty(EFFECT_FLAG_SET_AVAILABLE)
-    e5:SetRange(LOCATION_MZONE)
-    e5:SetTargetRange(0,LOCATION_MZONE)
-    e5:SetCondition(s.atkcon)
-    e5:SetTarget(s.rmtg)
-    e5:SetValue(LOCATION_REMOVED)
-    c:RegisterEffect(e5)
+	c:EnableReviveLimit()
+	Fusion.AddProcMix(c,true,true,70781052,aux.FilterBoolFunctionEx(Card.IsRace,RACE_FIEND))
+	--Name becomes "Summoned Skull"
+	local e1=Effect.CreateEffect(c)
+	e1:SetType(EFFECT_TYPE_SINGLE)
+	e1:SetCode(EFFECT_CHANGE_CODE)
+	e1:SetProperty(EFFECT_FLAG_SINGLE_RANGE)
+	e1:SetRange(LOCATION_MZONE+LOCATION_GRAVE)
+	e1:SetValue(70781052)
+	c:RegisterEffect(e1)
+	--Special Summon effect: destroy all non-Fiend monsters
+	local e2=Effect.CreateEffect(c)
+	e2:SetDescription(aux.Stringid(id,0))
+	e2:SetCategory(CATEGORY_DESTROY)
+	e2:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
+	e2:SetProperty(EFFECT_FLAG_DELAY)
+	e2:SetCode(EVENT_SPSUMMON_SUCCESS)
+	e2:SetCountLimit(1,id)
+	e2:SetTarget(s.destg)
+	e2:SetOperation(s.desop)
+	c:RegisterEffect(e2)
+	--ATK boost + banish instead of send
+	local e3=Effect.CreateEffect(c)
+	e3:SetType(EFFECT_TYPE_FIELD)
+	e3:SetCode(EFFECT_UPDATE_ATTACK)
+	e3:SetRange(LOCATION_MZONE)
+	e3:SetTargetRange(LOCATION_MZONE,0)
+	e3:SetCondition(s.atkcon)
+	e3:SetTarget(aux.TargetBoolFunction(Card.IsRace,RACE_FIEND))
+	e3:SetValue(500)
+	c:RegisterEffect(e3)
+	local e4=Effect.CreateEffect(c)
+	e4:SetType(EFFECT_TYPE_FIELD)
+	e4:SetCode(EFFECT_TO_GRAVE_REDIRECT)
+	e4:SetRange(LOCATION_MZONE)
+	e4:SetCondition(s.atkcon)
+	e4:SetTargetRange(0,LOCATION_MZONE)
+	e4:SetValue(LOCATION_REMOVED)
+	e4:SetTarget(s.rmtg)
+	c:RegisterEffect(e4)
 end
+s.listed_names=(70781052)
+s.listed_series=(0x45)
 
--- **Condición para destruir monstruos al ser Invocado Especialmente**
-function s.descon(e,tp,eg,ep,ev,re,r,rp)
-    return e:GetHandler():IsSummonType(SUMMON_TYPE_FUSION)
+--Destroy all non-Fiend monsters
+function s.desfilter(c)
+	return not c:IsRace(RACE_FIEND)
 end
 function s.destg(e,tp,eg,ep,ev,re,r,rp,chk)
-    if chk==0 then return Duel.IsExistingMatchingCard(aux.FilterFaceupFunction(Card.IsRace,RACE_FIEND),tp,LOCATION_MZONE,LOCATION_MZONE,1,nil) end
-    local g=Duel.GetMatchingGroup(aux.NOT(aux.FilterFaceupFunction(Card.IsRace,RACE_FIEND)),tp,LOCATION_MZONE,LOCATION_MZONE,nil)
-    Duel.SetOperationInfo(0,CATEGORY_DESTROY,g,#g,0,0)
+	if chk==0 then return Duel.IsExistingMatchingCard(s.desfilter,tp,LOCATION_MZONE+LOCATION_MZONE,LOCATION_MZONE,1,nil) end
+	local g=Duel.GetMatchingGroup(s.desfilter,tp,LOCATION_MZONE,LOCATION_MZONE,nil)
+	Duel.SetOperationInfo(0,CATEGORY_DESTROY,g,#g,0,0)
 end
 function s.desop(e,tp,eg,ep,ev,re,r,rp)
-    local g=Duel.GetMatchingGroup(aux.NOT(aux.FilterFaceupFunction(Card.IsRace,RACE_FIEND)),tp,LOCATION_MZONE,LOCATION_MZONE,nil)
-    Duel.Destroy(g,REASON_EFFECT)
+	local g=Duel.GetMatchingGroup(s.desfilter,tp,LOCATION_MZONE,LOCATION_MZONE,nil)
+	if #g>0 then Duel.Destroy(g,REASON_EFFECT) end
 end
 
--- **Condición para aplicar los efectos de buff y banish**
+--Condition: only Fiend monsters you control
 function s.atkcon(e)
-    return Duel.IsExistingMatchingCard(aux.FilterFaceupFunction(Card.IsRace,RACE_FIEND),e:GetHandlerPlayer(),LOCATION_MZONE,0,1,nil)
+	return Duel.IsExistingMatchingCard(aux.TRUE,e:GetHandlerPlayer(),LOCATION_MZONE,0,1,nil)
+		and Duel.GetMatchingGroupCount(aux.FilterBoolFunction(Card.IsRace,RACE_FIEND),e:GetHandlerPlayer(),LOCATION_MZONE,0,nil)
+		==Duel.GetFieldGroupCount(e:GetHandlerPlayer(),LOCATION_MZONE,0)
 end
+
+--Redirect Level 4 or lower monsters sent to GY
 function s.rmtg(e,c)
-    return c:IsLevelBelow(4)
+	return c:IsMonster() and c:IsLevelBelow(4)
 end

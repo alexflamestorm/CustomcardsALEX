@@ -1,95 +1,113 @@
 --Terror Archfiend of Lightning
 local s,id=GetID()
 function s.initial_effect(c)
-    -- Tratarse como Nivel 2 para Sincronía con tipo Demonio
-    local e1=Effect.CreateEffect(c)
-    e1:SetType(EFFECT_TYPE_SINGLE)
-    e1:SetCode(EFFECT_CHANGE_LEVEL)
-    e1:SetProperty(EFFECT_FLAG_SINGLE_RANGE)
-    e1:SetRange(LOCATION_MZONE)
-    e1:SetCondition(s.lvcon)
-    e1:SetValue(2)
-    c:RegisterEffect(e1)
+	--Treated as Level 2 for Fiend Synchro
+	local e0=Effect.CreateEffect(c)
+	e0:SetType(EFFECT_TYPE_SINGLE)
+	e0:SetCode(EFFECT_SYNCHRO_LEVEL)
+	e0:SetValue(s.slevel)
+	c:RegisterEffect(e0)
+	--Send Archfiend from Deck + Special Summon Archfiend
+	local e1=Effect.CreateEffect(c)
+	e1:SetDescription(aux.Stringid(id,0))
+	e1:SetCategory(CATEGORY_TOGRAVE+CATEGORY_SPECIAL_SUMMON)
+	e1:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
+	e1:SetCode(EVENT_SUMMON_SUCCESS)
+	e1:SetProperty(EFFECT_FLAG_DELAY)
+	e1:SetCountLimit(1,id)
+	e1:SetTarget(s.sptg)
+	e1:SetOperation(s.spop)
+	c:RegisterEffect(e1)
+	local e2=e1:Clone()
+	e2:SetCode(EVENT_SPSUMMON_SUCCESS)
+	c:RegisterEffect(e2)
+	--GY effect: recycle banished + add Summoned Skull support
+	local e3=Effect.CreateEffect(c)
+	e3:SetDescription(aux.Stringid(id,1))
+	e3:SetCategory(CATEGORY_TOGRAVE+CATEGORY_TOHAND)
+	e3:SetType(EFFECT_TYPE_IGNITION)
+	e3:SetRange(LOCATION_GRAVE)
+	e3:SetCountLimit(1,{id,1})
+	e3:SetCost(aux.bfgcost)
+	e3:SetTarget(s.gytg)
+	e3:SetOperation(s.gyop)
+	c:RegisterEffect(e3)
+end
+s.listed_series={SET_ARCHFIEND}
+s.listed_names={CARD_SUMMONED_SKULL}
 
-    -- Enviar 1 "Archfiend" al GY y luego Invocar Especial 1 "Archfiend" de la mano o Deck
-    local e2=Effect.CreateEffect(c)
-    e2:SetCategory(CATEGORY_TOGRAVE+CATEGORY_SPECIAL_SUMMON)
-    e2:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
-    e2:SetProperty(EFFECT_FLAG_DELAY)
-    e2:SetCode(EVENT_SUMMON_SUCCESS)
-    e2:SetCountLimit(1,id)
-    e2:SetTarget(s.sptg)
-    e2:SetOperation(s.spop)
-    c:RegisterEffect(e2)
-    local e3=e2:Clone()
-    e3:SetCode(EVENT_SPSUMMON_SUCCESS)
-    c:RegisterEffect(e3)
-
-    -- Regresar 1 carta desterrada al GY y buscar 1 carta que mencione "Summoned Skull"
-    local e4=Effect.CreateEffect(c)
-    e4:SetCategory(CATEGORY_TOGRAVE+CATEGORY_TOHAND)
-    e4:SetType(EFFECT_TYPE_IGNITION)
-    e4:SetRange(LOCATION_GRAVE)
-    e4:SetCountLimit(1,id+1)
-    e4:SetCost(aux.bfgcost)
-    e4:SetTarget(s.rtg)
-    e4:SetOperation(s.rop)
-    c:RegisterEffect(e4)
+--Level treat
+function s.slevel(e,c)
+	local lv=e:GetHandler():GetLevel()
+	return 2<<16 | lv -- Treated as Level 2 + original Level
 end
 
--- **Condición para ser tratado como Nivel 2**
-function s.lvcon(e)
-    return e:GetHandler():IsType(TYPE_TUNER) and Duel.IsExistingMatchingCard(aux.FaceupFilter(Card.IsRace,RACE_FIEND),e:GetHandlerPlayer(),LOCATION_MZONE,0,1,nil)
-end
-
--- **Enviar "Archfiend" al GY y Invocar Especial**
+--Send 1 Archfiend to GY and Special Summon
 function s.tgfilter(c)
-    return c:IsSetCard(0x45) and c:IsAbleToGrave() and not c:IsCode(id)
+	return c:IsSetCard(0x45) and c:IsAbleToGrave() and not c:IsCode(id)
 end
 function s.spfilter(c,e,tp)
-    return c:IsSetCard(0x45) and c:IsCanBeSpecialSummoned(e,0,tp,false,false)
+	return c:IsSetCard(0x45) and c:IsCanBeSpecialSummoned(e,0,tp,false,false)
 end
 function s.sptg(e,tp,eg,ep,ev,re,r,rp,chk)
-    if chk==0 then return Duel.IsExistingMatchingCard(s.tgfilter,tp,LOCATION_DECK,0,1,nil)
-        and Duel.IsExistingMatchingCard(s.spfilter,tp,LOCATION_HAND,0,1,nil) end
-    Duel.SetOperationInfo(0,CATEGORY_TOGRAVE,nil,1,tp,LOCATION_DECK)
-    Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,1,tp,LOCATION_HAND)
+	if chk==0 then 
+		if not Duel.IsExistingMatchingCard(s.tgfilter,tp,LOCATION_DECK,0,1,nil) then return false end
+		return Duel.GetLocationCount(tp,LOCATION_MZONE)>0 
+			and (Duel.IsExistingMatchingCard(s.spfilter,tp,LOCATION_HAND,0,1,nil,e,tp)
+			or (Duel.IsExistingMatchingCard(Card.IsCode,tp,LOCATION_MZONE,0,1,nil,CARD_SUMMONED_SKULL)
+				and Duel.IsExistingMatchingCard(s.spfilter,tp,LOCATION_DECK,0,1,nil,e,tp)))
+	end
+	Duel.SetOperationInfo(0,CATEGORY_TOGRAVE,nil,1,tp,LOCATION_DECK)
+	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,1,tp,LOCATION_HAND+LOCATION_DECK)
 end
 function s.spop(e,tp,eg,ep,ev,re,r,rp)
-    if not e:GetHandler():IsRelateToEffect(e) then return end
-    Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_TOGRAVE)
-    local g=Duel.SelectMatchingCard(tp,s.tgfilter,tp,LOCATION_DECK,0,1,1,nil)
-    if #g>0 and Duel.SendtoGrave(g,REASON_EFFECT)~=0 then
-        Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
-        local sg=Duel.SelectMatchingCard(tp,s.spfilter,tp,LOCATION_HAND,0,1,1,nil,e,tp)
-        if #sg>0 then
-            Duel.SpecialSummon(sg,0,tp,tp,false,false,POS_FACEUP)
-        end
-    end
+	if Duel.GetLocationCount(tp,LOCATION_MZONE)<=0 then return end
+	--Send Archfiend
+	if Duel.IsExistingMatchingCard(s.tgfilter,tp,LOCATION_DECK,0,1,nil) then
+		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_TOGRAVE)
+		local tg=Duel.SelectMatchingCard(tp,s.tgfilter,tp,LOCATION_DECK,0,1,1,nil)
+		if #tg>0 and Duel.SendtoGrave(tg,REASON_EFFECT)>0 then
+			--Special Summon from hand or Deck if Summoned Skull is present
+			local g=nil
+			local loc=LOCATION_HAND
+			if Duel.IsExistingMatchingCard(Card.IsCode,tp,LOCATION_MZONE,0,1,nil,CARD_SUMMONED_SKULL) then
+				loc=LOCATION_HAND+LOCATION_DECK
+			end
+			Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
+			g=Duel.SelectMatchingCard(tp,s.spfilter,tp,loc,0,1,1,nil,e,tp)
+			if #g>0 then
+				Duel.SpecialSummon(g,0,tp,tp,false,false,POS_FACEUP)
+			end
+		end
+	end
 end
 
--- **Regresar una carta desterrada y buscar una carta que mencione "Summoned Skull"**
-function s.rfilter(c)
-    return c:IsFaceup() and c:IsAbleToGrave()
+--GY effect: recycle banished + add Summoned Skull support
+function s.retfilter(c)
+	return c:IsAbleToGrave()
 end
 function s.thfilter(c)
-    return c:IsAbleToHand() and (c:IsSetCard(0x45) or c:ListsCode(70781052))
+	return c:ListsCode(70781052) and c:IsAbleToHand()
 end
-function s.rtg(e,tp,eg,ep,ev,re,r,rp,chk)
-    if chk==0 then return Duel.IsExistingMatchingCard(s.rfilter,tp,LOCATION_REMOVED,0,1,nil)
-        and Duel.IsExistingMatchingCard(s.thfilter,tp,LOCATION_DECK+LOCATION_GRAVE,0,1,nil) end
-    Duel.SetOperationInfo(0,CATEGORY_TOGRAVE,nil,1,tp,LOCATION_REMOVED)
-    Duel.SetOperationInfo(0,CATEGORY_TOHAND,nil,1,tp,LOCATION_DECK+LOCATION_GRAVE)
+function s.gytg(e,tp,eg,ep,ev,re,r,rp,chk)
+	if chk==0 then 
+		return Duel.IsExistingTarget(s.retfilter,tp,LOCATION_REMOVED,0,1,nil)
+			and Duel.IsExistingMatchingCard(s.thfilter,tp,LOCATION_DECK+LOCATION_GRAVE,0,1,nil) 
+	end
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_TOGRAVE)
+	local g=Duel.SelectTarget(tp,s.retfilter,tp,LOCATION_REMOVED,0,1,1,nil)
+	Duel.SetOperationInfo(0,CATEGORY_TOGRAVE,g,1,0,0)
+	Duel.SetOperationInfo(0,CATEGORY_TOHAND,nil,1,tp,LOCATION_DECK+LOCATION_GRAVE)
 end
-function s.rop(e,tp,eg,ep,ev,re,r,rp)
-    Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_TOGRAVE)
-    local g=Duel.SelectMatchingCard(tp,s.rfilter,tp,LOCATION_REMOVED,0,1,1,nil)
-    if #g>0 and Duel.SendtoGrave(g,REASON_EFFECT+REASON_RETURN)~=0 then
-        Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_ATOHAND)
-        local sg=Duel.SelectMatchingCard(tp,s.thfilter,tp,LOCATION_DECK+LOCATION_GRAVE,0,1,1,nil)
-        if #sg>0 then
-            Duel.SendtoHand(sg,nil,REASON_EFFECT)
-            Duel.ConfirmCards(1-tp,sg)
-        end
-    end
+function s.gyop(e,tp,eg,ep,ev,re,r,rp)
+	local tc=Duel.GetFirstTarget()
+	if tc and Duel.SendtoGrave(tc,REASON_EFFECT+REASON_RETURN)~=0 then
+		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_ATOHAND)
+		local g=Duel.SelectMatchingCard(tp,s.thfilter,tp,LOCATION_DECK+LOCATION_GRAVE,0,1,1,nil)
+		if #g>0 then
+			Duel.SendtoHand(g,nil,REASON_EFFECT)
+			Duel.ConfirmCards(1-tp,g)
+		end
+	end
 end
+
