@@ -1,97 +1,135 @@
---Psi-Caller/Assault Mode
+-- Psi-Caller/Assault Mode
+-- ID: 29900000
 local s,id=GetID()
+local psi_caller_id = 29800000 -- ID of the base "Psi-Caller" monster
+s.psi_caller_id = psi_caller_id
+
 function s.initial_effect(c)
-    -- Cannot be Normal Summoned/Set
-    c:EnableUnsummonable()
-    -- Must be Special Summoned with Assault Mode Activate
-    local e0=Effect.CreateEffect(c)
-    e0:SetType(EFFECT_TYPE_SINGLE)
-    e0:SetCode(EFFECT_CANNOT_SPECIAL_SUMMON)
-    e0:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
-    e0:SetCondition(function(e) return not Duel.IsPlayerAffectedByEffect(e:GetHandlerPlayer(),59822133) end)
-    e0:SetValue(function(e,c,sump,sumtype,sumpos,targetp,se) return not (se and se:GetHandler():IsCode(80280737)) end)
-    c:RegisterEffect(e0)
+	-- Summon Condition: Must be Special Summoned with "Assault Mode Activate"
+	c:SetSPSummonOnce(2) -- Standard for non-Nomi/Semi-Nomi monsters with custom SS conditions
+	
+	-- Mark as Tuner
+	local e0=Effect.CreateEffect(c)
+	e0:SetType(EFFECT_TYPE_SINGLE)
+	e0:SetProperty(EFFECT_FLAG_SINGLE_RANGE)
+	e0:SetCode(EFFECT_ADD_TYPE)
+	e0:SetRange(LOCATION_MZONE)
+	e0:SetValue(TYPE_TUNER)
+	c:AddEffect(e0)
 
-    -- Send 1 Synchro to summon its Assault Mode
-    local e1=Effect.CreateEffect(c)
-    e1:SetDescription(aux.Stringid(id,0))
-    e1:SetCategory(CATEGORY_SPECIAL_SUMMON)
-    e1:SetType(EFFECT_TYPE_IGNITION)
-    e1:SetRange(LOCATION_MZONE)
-    e1:SetCountLimit(1,id)
-    e1:SetTarget(s.sptg)
-    e1:SetOperation(s.spop)
-    c:RegisterEffect(e1)
+	-- Effect 1 (HOPT): Send Synchro to SS /Assault Mode, maybe send ED Synchro
+	local e1=Effect.CreateEffect(c)
+	e1:SetDescription(aux.Stringid(id,0))
+	e1:SetCategory(CATEGORY_SPECIAL_SUMMON+CATEGORY_TOGRAVE)
+	e1:SetType(EFFECT_TYPE_IGNITION)
+	e1:SetRange(LOCATION_MZONE)
+	e1:SetCountLimit(1,id) -- HOPT for Effect 1
+	e1:SetCost(s.cost1)
+	e1:SetTarget(s.tg1)
+	e1:SetOperation(s.op1)
+	c:AddEffect(e1)
 
-    -- Revive Psi-Caller
-    local e2=Effect.CreateEffect(c)
-    e2:SetDescription(aux.Stringid(id,1))
-    e2:SetCategory(CATEGORY_SPECIAL_SUMMON)
-    e2:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
-    e2:SetProperty(EFFECT_FLAG_CARD_TARGET+EFFECT_FLAG_DELAY)
-    e2:SetCode(EVENT_DESTROYED)
-    e2:SetCountLimit(1,{id,1})
-    e2:SetTarget(s.revtg)
-    e2:SetOperation(s.revop)
-    c:RegisterEffect(e2)
+	-- Effect 2 (HOPT): Special Summon Psi-Caller from GY if destroyed
+	local e2=Effect.CreateEffect(c)
+	e2:SetDescription(aux.Stringid(id,1))
+	e2:SetCategory(CATEGORY_SPECIAL_SUMMON)
+	e2:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
+	e2:SetCode(EVENT_DESTROYED)
+	e2:SetProperty(EFFECT_FLAG_DELAY)
+	e2:SetCountLimit(1,{id,1}) -- HOPT for Effect 2
+	e2:SetCondition(s.spcon2)
+	e2:SetTarget(s.sptg2)
+	e2:SetOperation(s.spop2)
+	c:AddEffect(e2)
 end
+s.listed_series={0x104f} -- Assault Mode archetype code
 
--- Enviar Synchro para Invocar su Assault Mode
-function s.assfilter(c,e,tp)
-    return c:IsType(TYPE_MONSTER) and c:IsSetCard(0x301) and c:IsCanBeSpecialSummoned(e,0,tp,true,false)
-end
-function s.synfilter(c,tp)
-    return c:IsType(TYPE_SYNCHRO) and c:IsAbleToGrave()
-        and Duel.IsExistingMatchingCard(s.assfilter,tp,LOCATION_HAND+LOCATION_DECK,0,1,nil,e,tp,c:GetCode())
-end
-function s.synextrafilter(c,tp)
-    return c:IsType(TYPE_SYNCHRO) and c:IsAbleToGrave()
-        and Duel.IsExistingMatchingCard(s.assfilter,tp,LOCATION_HAND+LOCATION_DECK,0,1,nil,e,tp,c:GetCode())
-end
-function s.sptg(e,tp,eg,ep,ev,re,r,rp,chk)
-    local b1=Duel.IsExistingMatchingCard(s.synfilter,tp,LOCATION_MZONE,0,1,nil,tp)
-    local b2=Duel.IsExistingMatchingCard(s.synextrafilter,tp,LOCATION_EXTRA,0,1,nil,tp)
-        and Duel.GetMatchingGroupCount(aux.TRUE,tp,LOCATION_MZONE,0,nil)<Duel.GetMatchingGroupCount(aux.TRUE,tp,0,LOCATION_MZONE,nil)
-    if chk==0 then return b1 or b2 end
-    Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,1,tp,LOCATION_HAND+LOCATION_DECK)
-end
-function s.spop(e,tp,eg,ep,ev,re,r,rp)
-    local b1=Duel.IsExistingMatchingCard(s.synfilter,tp,LOCATION_MZONE,0,1,nil,tp)
-    local b2=Duel.IsExistingMatchingCard(s.synextrafilter,tp,LOCATION_EXTRA,0,1,nil,tp)
-        and Duel.GetMatchingGroupCount(aux.TRUE,tp,LOCATION_MZONE,0,nil)<Duel.GetMatchingGroupCount(aux.TRUE,tp,0,LOCATION_MZONE,nil)
-    local opt=0
-    if b1 and b2 then
-        opt=Duel.SelectOption(tp,aux.Stringid(id,2),aux.Stringid(id,3))
-    elseif b1 then opt=0 else opt=1 end
+-- Map of Synchro ID to its /Assault Mode ID (Add more pairs as needed)
+local synchro_to_am={
+		[44508094]=61257789, -- Stardust Dragon -> Stardust Dragon/Assault Mode
+	[70902743]=77336644, -- Red Dragon Archfiend -> Red Dragon Archfiend/Assault Mode
+	[31924889]=14553285, -- Arcanite Magician -> Arcanite Magician/Assault Mode
+	[06021033]=01764972, -- Doomkaiser Dragon -> Doomkaiser Dragon/Assault Mode
+	[95526884]=37169670, -- Hyper Psychic Blaster -> Hyper Psychic Blaster/Assault Mode
+	[38898779]=23693634, -- Colossal Fighter -> Colossal Fighter/Assault Mode
+	[80321197]=101303008, -- Crimson Blader -> Crimson Blader/Assault Mode
+	[97836203]=47027714, -- T.G. Halberd Cannon -> T.G. Halberd Cannon/Assault Mode
+	[60800381]=101303007, -- Junk Warrior -> Junk Warrior/Assault Mode
+	[51447164]=10500000, -- T.G. Blade Blaster -> T.G. Blade Blaster/Assault Mode
+	[29800000]=29900000 -- Psi-Caller -> Psi-Caller/Assault Mode (Self reference, assuming ID)
 
-    local loc=(opt==0) and LOCATION_MZONE or LOCATION_EXTRA
-    Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_TOGRAVE)
-    local tc=Duel.SelectMatchingCard(tp,(opt==0) and s.synfilter or s.synextrafilter,tp,loc,0,1,1,nil,tp):GetFirst()
-    if not tc then return end
-    if Duel.SendtoGrave(tc,REASON_EFFECT)==0 then return end
-
-    Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
-    local g=Duel.SelectMatchingCard(tp,function(c) return c:IsCode(tc:GetCode()+1) and c:IsCanBeSpecialSummoned(e,0,tp,true,false) end,
-        tp,LOCATION_HAND+LOCATION_DECK,0,1,1,nil)
-    if #g>0 then
-        Duel.SpecialSummon(g,0,tp,tp,true,false,POS_FACEUP)
-    end
+}
+function s.GetAMID(synchro_code)
+	return synchro_to_am[synchro_code]
 end
 
--- Revivir Psi-Caller
-function s.revtg(e,tp,eg,ep,ev,re,r,rp,chk,chkc)
-    if chkc then return chkc:IsLocation(LOCATION_GRAVE) and chkc:IsCode(psi_id) end
-    if chk==0 then return Duel.IsExistingTarget(Card.IsCode,tp,LOCATION_GRAVE,0,1,nil,psi_id) end
-    Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
-    local g=Duel.SelectTarget(tp,Card.IsCode,tp,LOCATION_GRAVE,0,1,1,nil,psi_id)
-    Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,g,1,0,0)
+-- Effect 1: Cost, Target, Operation
+function s.cost1_filter(c)
+	return c:IsSynchroMonster() and c:IsAbleToGraveAsCost()
 end
-function s.revop(e,tp,eg,ep,ev,re,r,rp)
-    local tc=Duel.GetFirstTarget()
-    if tc and Duel.SpecialSummon(tc,0,tp,tp,false,false,POS_FACEUP)>0 then
-        -- Nothing extra
-    end
+function s.cost1(e,tp,eg,ep,ev,re,r,rp,chk)
+	if chk==0 then return Duel.IsExistingMatchingCard(s.cost1_filter,tp,LOCATION_MZONE,0,1,nil) end
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_TOGRAVE)
+	local g=Duel.SelectMatchingCard(tp,s.cost1_filter,tp,LOCATION_MZONE,0,1,1,nil)
+	e:SetLabelObject(g:GetFirst()) -- Store the released card for the operation
+	Duel.SendtoGrave(g,REASON_COST)
+end
+function s.tg1(e, tp, eg, ep, ev, re, r, rp, chk)
+	local released_c = e:GetLabelObject()
+	local am_id = s.GetAMID(released_c:GetPreviousCode())
+	if chk == 0 then
+		-- Check if the corresponding /Assault Mode monster exists in the Deck
+		return am_id and Duel.GetLocationCount(tp, LOCATION_MZONE) > 0
+			and Duel.IsExistingMatchingCard(Card.IsCode, tp, LOCATION_DECK, 0, 1, nil, am_id)
+	end
+	Duel.SetOperationInfo(0, CATEGORY_SPECIAL_SUMMON, nil, 1, tp, LOCATION_DECK)
+	-- Optional part: check for ED Synchro send
+	if Duel.GetMatchingGroupCount(nil, 1-tp, LOCATION_MZONE, 0, nil) > Duel.GetMatchingGroupCount(nil, tp, LOCATION_MZONE, 0, nil)
+		and Duel.IsExistingMatchingCard(Card.IsSynchroMonster, tp, LOCATION_EXTRA, 0, 1, nil) then
+		Duel.SetOperationInfo(0, CATEGORY_TOGRAVE, nil, 1, tp, LOCATION_EXTRA)
+	end
+end
+function s.op1(e, tp, eg, ep, ev, re, r, rp)
+	local released_c = e:GetLabelObject()
+	local am_id = s.GetAMID(released_c:GetPreviousCode())
+	if not am_id then return end
+
+	Duel.Hint(HINT_SELECTMSG, tp, HINTMSG_SPSUMMON)
+	-- Summon the corresponding /Assault Mode monster from the Deck
+	local g = Duel.SelectMatchingCard(tp, Card.IsCode, tp, LOCATION_DECK, 0, 1, 1, nil, am_id)
+	local tc = g:GetFirst()
+	-- Note: Using SUMMON_TYPE_SPECIAL is sufficient here. The 'treated as' text is flavor/game rule.
+	if tc and Duel.SpecialSummon(tc, 0, tp, tp, false, false, POS_FACEUP) > 0 then 
+		-- Secondary effect: send 1 Synchro from ED to GY
+		if Duel.GetMatchingGroupCount(nil, 1-tp, LOCATION_MZONE, 0, nil) > Duel.GetMatchingGroupCount(nil, tp, LOCATION_MZONE, 0, nil)
+			and Duel.IsExistingMatchingCard(Card.IsSynchroMonster, tp, LOCATION_EXTRA, 0, 1, nil)
+			and Duel.SelectYesNo(tp, aux.Stringid(id, 2)) then
+			Duel.BreakEffect()
+			Duel.Hint(HINT_SELECTMSG, tp, HINTMSG_TOGRAVE)
+			local edg = Duel.SelectMatchingCard(tp, Card.IsSynchroMonster, tp, LOCATION_EXTRA, 0, 1, 1, nil)
+			Duel.SendtoGrave(edg, REASON_EFFECT)
+		end
+	end
 end
 
--- ID de Psi-Caller
-local psi_id=YOUR_PSI_CALLER_CARD_ID_HERE
+-- Effect 2: Special Summon Psi-Caller
+function s.spcon2(e, tp, eg, ep, ev, re, r, rp)
+	-- Was destroyed while on the field
+	return e:GetHandler():IsReason(REASON_DESTROY) and e:GetHandler():IsPreviousLocation(LOCATION_MZONE)
+end
+function s.sptg2_filter(c, e, tp)
+	return c:IsCode(s.psi_caller_id) and c:IsCanBeSpecialSummoned(e, 0, tp, false, false)
+end
+function s.sptg2(e, tp, eg, ep, ev, re, r, rp, chk)
+	if chk==0 then return Duel.GetLocationCount(tp,LOCATION_MZONE)>0
+		and Duel.IsExistingTarget(s.sptg2_filter, tp, LOCATION_GRAVE, 0, 1, nil, e, tp) end
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
+	local g=Duel.SelectTarget(tp,s.sptg2_filter, tp, LOCATION_GRAVE, 0, 1, 1, nil, e, tp)
+	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,g,1,0,0)
+end
+function s.spop2(e, tp, eg, ep, ev, re, r, rp)
+	local tc=Duel.GetFirstTarget()
+	if tc and tc:IsRelateToEffect(e) then
+		Duel.SpecialSummon(tc,0,tp,tp,false,false,POS_FACEUP)
+	end
+end
